@@ -1,0 +1,46 @@
+main section.content {
+	padding-top: 0;
+}
+
+.sidebar .app-name {
+    text-align: left;
+    margin-left: 15px;
+}
+
+.sidebar ul li {
+	font-size: 14px;
+	color: #505d6b;
+}
+
+h2#contents + ul p {
+    margin: 0;
+}
+
+iframe#swagger {
+	display: block;
+	width: 100%;
+	height: 100vh;
+	border: none;
+}
+
+#sample-notifications + table th {
+	border: 1px solid transparent;
+	border-bottom-color: #CCC;
+}
+#sample-notifications + table td {
+	border: 1px solid transparent;
+
+	padding-top: 13px;
+}
+
+#sample-notifications + table tr th:first-child {
+	 border: 1px solid transparent;
+	 /* border-right-color: #CCC; */
+	 border-bottom-color: #CCC;
+ }
+#sample-notifications + table tr td:first-child {
+	border: 1px solid transparent;
+	/* border-right-color: #CCC; */
+}
+
+

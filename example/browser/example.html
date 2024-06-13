@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+
+    <title>Barchart Alerting SDK Example</title>
+
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" integrity="sha384-1q8mTJOASx8j1Au+a5WDVnPi2lkFfwwEAa8hDDdjZlpLegxhjVME1fgjWPGmkzs7" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap-theme.min.css" integrity="sha384-fLW2N01lMqjakBkx3l/M9EahuwpSfeNvV63J5ezn3uZzapT0u7EYsXMjQV+0En5r" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" type="text/css">
+    <link rel="stylesheet" href="example.css" type="text/css">
+
+    <script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/knockout/3.5.0/knockout-min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.0.0/lodash.min.js"></script>
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+
+	<script src="example.js"></script>
+
+    <script type="text/html" id="alert-header-template">
+        <div class="pull-left">
+	        <h4 class="pull-left header-text barchart-logo"><span>[Alerts SDK Example]</span></h4>
+
+            <div class="header-action-buttons pull-right">
+                <span class="text-button glyphicon glyphicon-th-list" data-bind="click: changeToGrid, visible: canDisconnect" data-toggle="tooltip" data-placement="top" title="View Alerts"></span>
+                <span class="text-button glyphicon glyphicon-book" data-bind="click: changeToHistory, visible: canDisconnect" data-toggle="tooltip" data-placement="top" title="View Triggers"></span>
+                <span class="text-button glyphicon glyphicon-plus" data-bind="click: changeToCreate, visible: canDisconnect" data-toggle="tooltip" data-placement="top" title="Create Alert"></span>
+                <span class="text-button glyphicon glyphicon-user" data-bind="click: changeToPreferences, visible: canDisconnect" data-toggle="tooltip" data-placement="top" title="Configure User Options"></span>
+                <span class="text-button glyphicon glyphicon-remove" data-bind="click: disconnect, visible: canDisconnect" data-toggle="tooltip" data-placement="top" title="Log Out"></span>
+            </div>
+        </div>
+    </script>
+
+	<script type="text/html" id="alert-disconnected">
+		<div class="container-center-outer">
+			<div class="container-center-inner">
+				<form class="form-horizontal login">
+					<div class="form-group">
+						<label class="pull-left">Transport</label>
+						<div class="dropdown refresh">
+							<button class="btn btn-default dropdown-toggle form-control" type="button" data-toggle="dropdown">
+								<span data-bind="text: mode"></span>
+								<span class="caret pull-right"></span>
+							</button>
+							<ul class="dropdown-menu">
+								<li><a href="#" data-bind="click: setSocketTransport">socket.io</a></li>
+								<li><a href="#" data-bind="click: setRestTransport">rest</a></li>
+							</ul>
+						</div>
+					</div>
+					<div class="form-group" data-bind="css: { 'has-error': host().length === 0 }, event: { keypress: handleConnectKeypress }">
+						<label class="pull-left">Host</label>
+						<input class="form-control" data-bind="textInput: host" type="text">
+					</div>
+					<div class="form-group" data-bind="css: { 'has-error': system().length === 0 }, event: { keypress: handleConnectKeypress }">
+						<label class="pull-left">System</label>
+						<input class="form-control" data-bind="textInput: system" type="text">
+					</div>
+					<div class="form-group" data-bind="css: { 'has-error': userId().length === 0 }, event: { keypress: handleConnectKeypress }">
+						<label class="pull-left">User ID</label>
+						<input class="form-control" data-bind="textInput: userId, hasFocus: true">
+					</div>
+					<div class="form-group buttons">
+						<button class="form-control btn btn-primary" type="button" data-bind="click: connect, enable: canConnect">Connect</button>
+					</div>
+					<div data-bind="text: message, visible: message"></div>
+				</form>
+			</div>
+		</div>
+	</script>
+
+
+	<script type="text/html" id="alert-grid-template">
+        <table class="table table-striped small">
+            <thead>
+                <th class="center col-md-1"></th>
+                <th class="left col-md-3">ID</th>
+                <th class="left col-md-2">Name</th>
+                <th class="center col-md-2 alert-action-buttons">
+                    <span class="text-button text-button-black glyphicon glyphicon-play" data-bind="click: enableAlerts"></span>
+                    <span style="padding-left: 10px;">State</span>
+                    <span class="text-button text-button-black glyphicon glyphicon-stop" data-bind="click: disableAlerts"></span>
+                </th>
+                <th class="center col-md-2">Create Date</th>
+                <th class="center col-md-2">Last Triggered</th>
+            </thead>
+            <tbody data-bind="template: { name: 'alert-grid-item-template', foreach: alertsFormatted }"></tbody>
+        </table>
+    </script>
+
+    <script type="text/html" id="alert-grid-item-template">
+        <tr>
+            <td class="center col-md-1 alert-action-buttons">
+                <span class="text-button text-button-black glyphicon glyphicon-search" data-bind="click: function() { $parent.changeToView($data); }"></span>
+                <span class="text-button text-button-black glyphicon glyphicon-remove" data-bind="click: function() { $parent.deleteAlert($data); }, visible: !processing()"></span>
+            </td>
+            <td class="left col-md-3" data-bind="text: alert().alert_id"></td>
+            <td class="left col-md-2" data-bind="text: alert().name"></td>
+            <td class="center col-md-2">
+                <div>
+                <span class="alert-state-buttons">
+                    <span class="text-button text-button-black glyphicon glyphicon-play" data-bind="click: start, visible: canStart"></span>
+                    <span class="text-button text-button-black glyphicon glyphicon-pause" data-bind="click: pause, visible: canPause"></span>
+                    <span class="text-button text-button-black glyphicon glyphicon-refresh" data-bind="click: refresh, visible: canRefresh"></span>
+                </span>
+                <span data-bind="text: alert().alert_state"></span>
+                </div>
+            </td>
+            <td class="center col-md-2" data-bind="text: createDateDisplay"></td>
+            <td class="center col-md-2" data-bind="text: lastTriggerDateDisplay"></td>
+        </tr>
+    </script>
+
+    <script type="text/html" id="alert-entry-template">
+        <div data-bind="with: alert">
+            <div class="panel panel-info">
+                <div class="panel-heading">
+                    <h3 class="panel-title">General</h3>
+                </div>
+                <table class="alert-create table">
+                    <tbody>
+                        <tr>
+                            <td class="col-md-1">
+                                <label class="control-label col-md-1">Name</label>
+                            </td>
+                            <td class="col-md-5">
+                                <input class="form-control" data-bind="textInput: name, enable: ready" type="text" placeholder="Alert Name (optional)">
+                            </td>
+                            <td class="col-md-2">
+                                <label class="control-label">Trigger Behavior</label>
+                            </td>
+                            <td class="col-md-2">
+                                <div class="dropdown">
+                                    <button class="btn btn-default dropdown-toggle" data-bind="enable: ready" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                                        <span data-bind="text: alertBehavior"></span>
+                                    </button>
+                                    <ul class="dropdown-menu" data-bind="foreach: alertBehaviors">
+                                        <li class="center"><a href="#" data-bind="text: $data, click: function() { $parent.selectAlertBehavior($data); }"></a></li>
+                                    </ul>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="col-md-1">
+                                <label class="control-label col-md-1">Notes</label>
+                            </td>
+                            <td class="col-md-5">
+                                <input class="form-control" data-bind="textInput: userNotes, enable: ready" type="text" placeholder="User Notes (optional)">
+                            </td>
+                            <td class="col-md-2">
+                                <label class="control-label">Classification</label>
+                            </td>
+                            <td class="col-md-2">
+                                <div class="dropdown">
+                                    <button class="btn btn-default dropdown-toggle" data-bind="enable: ready" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                                        <span data-bind="text: alertType"></span>
+                                    </button>
+                                    <ul class="dropdown-menu" data-bind="foreach: alertTypes">
+                                        <li class="center"><a href="#" data-bind="text: $data, click: function() { $parent.selectAlertType($data); }"></a></li>
+                                    </ul>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td class="col-md-1">
+                                <label class="control-label col-md-1">Key</label>
+                            </td>
+                            <td class="col-md-5">
+                                <input class="form-control" data-bind="textInput: alertSystemKey, enable: ready" type="text" placeholder="External Key (optional)">
+                            </td>
+                            <td class="col-md-4" colspan="2">
+                            </td>
+                        </tr>
+                        <tr data-bind="visible: createDate">
+                            <td class="col-md-1">
+                                <label class="control-label col-md-1">Created</label>
+                            </td>
+                            <td class="col-md-9" colspan="3" data-bind="text: createDate"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="panel panel-info">
+                <div class="panel-heading">
+                    <h3 class="panel-title"><span class="text-button entry-item-add-button glyphicon glyphicon-plus" data-bind="click: function() { addCondition(null); }, visible: ready"></span> Conditions</h3>
+                </div>
+                <table class="alert-create table">
+                    <!-- ko foreach: conditions -->
+                    <tbody data-bind="template: { name: 'alert-create-condition-template' }"></tbody>
+                    <!-- /ko -->
+                </table>
+            </div>
+            <div class="panel panel-info">
+                <div class="panel-heading">
+                    <h3 class="panel-title"><span class="text-button entry-item-add-button glyphicon glyphicon-plus" data-bind="click: function() { addPublisher(null); }, visible: ready"></span> Publishers</h3>
+                </div>
+                <table class="alert-create table">
+                    <tbody class="table" data-bind="template: { name: 'alert-create-publisher-template', foreach: publishers }"></tbody>
+                </table>
+            </div>
+            <!-- ko if: showSchedules -->
+            <div class="panel panel-info">
+                <div class="panel-heading">
+                    <h3 class="panel-title"><span class="text-button entry-item-add-button glyphicon glyphicon-plus" data-bind="click: function() { addSchedule(null); }, visible: ready"></span> Schedules</h3>
+                </div>
+                <table class="alert-create table">
+                    <!-- ko foreach: schedules -->
+                    <tbody data-bind="template: { name: 'alert-create-schedule-template' }"></tbody>
+                    <!-- /ko -->
+                </table>
+            </div>
+            <!-- /ko -->
+            <button class="btn btn-primary btn-default" data-bind="click: createAlert, enable: canSave">Save</button>
+            <button class="btn btn-primary btn-default" data-bind="click: clearAlert, visible: complete">New</button>
+
+            <div class="alert alert-danger error-box" role="alert" data-bind="visible: error">
+                <span class="glyphicon glyphicon-exclamation-sign" aria-hidden="true"></span>
+                <span data-bind="text: error"></span>
+            </div>
+        </div>
+    </script>
+
+    <script type="text/html" id="alert-create-schedule-template">
+        <tr>
+            <td class="col-md-1">
+                <span class="text-button text-button-black glyphicon glyphicon-minus entry-item-remove-button" data-bind="click: function() { $parent.removeSchedule($data); }, visible: ready"></span>
+            </td>
+            <td class="col-md-2">
+                <input class="form-control" data-bind="textInput: time, enable: ready" type="text" placeholder="HH:MM">
+            </td>
+            <td class="col-md-3">
+                <div class="dropdown">
+                    <button class="btn btn-default dropdown-toggle" data-bind="enable: ready" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                        <span data-bind="text: day"></span>
+                    </button>
+                    <ul class="dropdown-menu" data-bind="foreach: days">
+                        <li class="center"><a href="#" data-bind="text: $data, click: function() { $parent.selectDay($data); }"></a></li>
+                    </ul>
+                </div>
+            </td>
+            <td class="col-md-4" colspan="2">
+                <div class="dropdown">
+                    <button class="btn btn-default dropdown-toggle" data-bind="enable: ready" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                        <span data-bind="text: timezone"></span>
+                    </button>
+                    <ul class="dropdown-menu" data-bind="foreach: timezones">
+                        <li class="center"><a href="#" data-bind="text: $data, click: function() { $parent.selectTimezone($data); }"></a></li>
+                    </ul>
+                </div>
+            </td>
+        </tr>
+    </script>
+
+    <script type="text/html" id="alert-create-condition-template">
+        <tr class="condition">
+            <td class="col-md-1">
+                <span class="text-button text-button-black glyphicon glyphicon-minus entry-item-remove-button" data-bind="click: function() { $parent.removeCondition($data); }, visible: ready"></span>
+            </td>
+            <td class="col-md-2">
+                <div class="dropdown">
+                    <button class="btn btn-default dropdown-toggle" data-bind="enable: ready" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                        <span data-bind="text: target().description"></span>
+                    </button>
+                    <ul class="dropdown-menu" data-bind="foreach: targets">
+                        <li class="center"><a href="#" data-bind="text: description, click: function() { $parent.selectTarget($data); }"></a></li>
+                    </ul>
+                </div>
+            </td>
+            <td class="col-md-3">
+                <input class="form-control" data-bind="textInput: targetIdentifier, attr: { placeholder: target().identifier_description }, enable: ready" type="text">
+            </td>
+            <td class="col-md-4" colspan="2">
+            </td>
+        </tr>
+        <!-- ko foreach: qualifiers -->
+        <tr class="qualifier" data-bind="template: { name: 'alert-create-condition-qualifier-template' }"></tr>
+        <!-- /ko -->
+        <!-- ko foreach: properties -->
+        <tr class="component" data-bind="template: { name: 'alert-create-condition-property-template' }"></tr>
+        <!-- ko if: showModifiers -->
+        <!-- ko foreach: parent.modifiers -->
+        <tr class="component" data-bind="template: { name: 'alert-create-condition-modifier-template' }"></tr>
+        <!-- /ko -->
+        <!-- /ko -->
+        <!-- /ko -->
+    </script>
+
+    <script type="text/html" id="alert-create-condition-qualifier-template">
+        <td class="col-md-1"></td>
+        <td class="col-md-2"></td>
+        <td class="col-md-3">
+            <input class="form-control" data-bind="textInput: qualifierValue, enable: ready, attr: { placeholder: qualifierDescription }" type="text">
+        </td>
+        <td class="col-md-4" colspan="2">
+        </td>
+    </script>
+
+    <script type="text/html" id="alert-create-condition-property-template">
+        <td class="col-md-1"></td>
+        <td class="col-md-2"></td>
+        <td class="col-md-3">
+            <div class="dropdown">
+                <button class="btn btn-default dropdown-toggle" type="button" data-bind="enable: parent.ready" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                    <span data-bind="text: description"></span>
+                </button>
+                <ul class="dropdown-menu" data-bind="foreach: tree">
+                    <li class="center"><a href="#" data-bind="text: description, click: function() { $parent.selectTree($data); }"></a></li>
+                </ul>
+            </div>
+        </td>
+        <!-- ko if: showOperator -->
+        <td class="col-md-2">
+            <div class="dropdown">
+                <button class="btn btn-default dropdown-toggle" type="button" data-bind="enable: parent.ready" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                    <span data-bind="text: parent.operator().display.compound"></span>
+                </button>
+                <ul class="dropdown-menu" data-bind="foreach: parent.operators">
+                    <li class="center"><a href="#" data-bind="text: display.compound, click: function() { $parent.parent.selectOperator($data); }"></a></li>
+                </ul>
+            </div>
+        </td>
+        <!-- ko if: showOptions -->
+        <td class="col-md-2">
+            <div class="dropdown">
+                <button class="btn btn-default dropdown-toggle" type="button" data-bind="enable: parent.ready" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                    <span data-bind="text: parent.operand()"></span>
+                </button>
+                <ul class="dropdown-menu" data-bind="foreach: parent.operator().operand_options">
+                    <li class="center"><a href="#" data-bind="text: $data, click: function() { $parent.parent.selectOperand($data); }"></a></li>
+                </ul>
+            </div>
+        </td>
+        <!-- /ko -->
+        <!-- ko ifnot: showOptions -->
+        <td class="col-md-2">
+            <input class="form-control pull-left" data-bind="css: { percent: showPercent }, textInput: parent.operand, enable: parent.ready" type="text" placeholder="value">
+            <!-- ko if: showPercent -->
+            <div class="pull-right">%</div>
+            <!-- /ko -->
+        </td>
+        <!-- /ko -->
+        <!-- /ko -->
+        <!-- ko ifnot: showOperator -->
+        <td class="col-md-4" colspan="2">
+        </td>
+        <!-- /ko -->
+    </script>
+
+    <script type="text/html" id="alert-create-condition-modifier-template">
+        <td class="col-md-1"></td>
+        <td class="col-md-2"></td>
+        <td class="col-md-3"></td>
+        <td class="col-md-2">
+            <div class="dropdown">
+                <button class="btn btn-default dropdown-toggle" type="button" data-bind="enable: parent.ready" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                    <span data-bind="text: modifierDisplay"></span>
+                </button>
+                <ul class="dropdown-menu" data-bind="foreach: modifiers">
+                    <li class="center"><a href="#" data-bind="text: display, click: function() { $parent.selectModifier($data); }"></a></li>
+                </ul>
+            </div>
+        </td>
+        <td class="col-md-2">
+            <!-- ko if: showValue -->
+            <input class="form-control pull-left" data-bind="css: { percent: showPercent }, textInput: value, enable: parent.ready" type="text" placeholder="value">
+            <!-- ko if: showPercent -->
+            <div class="pull-right">%</div>
+            <!-- /ko -->
+            <!-- /ko -->
+        </td>
+    </script>
+
+    <script type="text/html" id="alert-create-publisher-template">
+        <tr>
+            <td class="col-md-1">
+                <span class="text-button text-button-black glyphicon glyphicon-minus entry-item-remove-button" data-bind="click: function() { $parent.removePublisher($data); }, visible: ready"></span>
+            </td>
+            <td class="col-md-2">
+                <div class="dropdown">
+                    <button class="btn btn-default dropdown-toggle" data-bind="enable: ready" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                        <span data-bind="text: publisherType().transport"></span>
+                    </button>
+                    <ul class="dropdown-menu" data-bind="foreach: publisherTypes">
+                        <li class="center"><a href="#" data-bind="text: transport, click: function() { $parent.selectPublisherType($data); }"></a></li>
+                    </ul>
+                </div>
+            </td>
+            <td class="col-md-3">
+                <div class="input-group">
+                    <div class="input-group-addon">
+                        <div class="text-button" data-bind="click: toggleDefaultRecipient, enable: ready">
+                            <!-- ko if: useDefaultRecipient -->
+                            <span>Default</span>
+                            <!-- /ko -->
+                            <!-- ko ifnot: useDefaultRecipient -->
+                            <span>Custom</span>
+                            <!-- /ko -->
+                        </div>
+                    </div>
+                    <input class="form-control" data-bind="textInput: recipient, enable: recipientReady" type="text" placeholder="Recipient (e.g. phone number)">
+                </div>
+            </td>
+            <td class="col-md-4">
+                <input class="form-control" data-bind="textInput: format, enable: ready" type="text" placeholder="Message (to include with alert)">
+            </td>
+        </tr>
+    </script>
+
+    <script type="text/html" id="alert-preferences-template">
+        <div data-bind="with: marketDataSettings" style="margin-bottom: 20px;">
+            <div class="panel panel-info">
+                <div class="panel-heading">
+                    <h3 class="panel-title">Market Data Settings</h3>
+                </div>
+
+                <table class="market-data-settings table">
+                    <tbody>
+                    <tr>
+                        <td class="col-md-2">
+                            <label class="control-label">System</label>
+                        </td>
+                        <td class="col-md-4">
+                            <input class="form-control" data-bind="textInput: systemId, enable: false" type="text" placeholder="System Name">
+                        </td>
+                        <td class="col-md-2">
+                            <label class="control-label">User ID</label>
+                        </td>
+                        <td class="col-md-4">
+                            <input class="form-control" data-bind="textInput: userId, enable: false" type="text" placeholder="User ID">
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="col-md-2">
+                            <label class="control-label">Market Data ID</label>
+                        </td>
+                        <td class="col-md-4">
+                            <input class="form-control" data-bind="textInput: marketDataId, enable: ready" type="text" placeholder="Market Data ID">
+                        </td>
+                        <td class="col-md-2">
+                        </td>
+                        <td class="col-md-4">
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div>
+                <button class="btn btn-primary btn-default" data-bind="click: savePreferences, enable: ready">Save</button>
+            </div>
+        </div>
+
+        <div data-bind="with: publisherSettings">
+            <div class="panel panel-info">
+                <div class="panel-heading">
+                    <h3 class="panel-title">Publisher Settings</h3>
+                </div>
+
+                <table class="table table-striped small" style="margin-bottom: 5px;">
+                    <thead>
+                        <th class="left col-md-1">Transport</th>
+                        <th class="center col-md-2">Default Recipient</th>
+                        <th class="center col-md-2">Default Recipient HMAC</th>
+                        <th class="center col-md-2">Timezone</th>
+                        <th class="center col-md-1">Start Time</th>
+                        <th class="center col-md-1">End Time</th>
+                        <th class="center col-md-1">Price Alerts</th>
+                        <th class="center col-md-1">News Alerts</th>
+                        <th class="center col-md-1">Match Alerts</th>
+                    </thead>
+                    <tbody data-bind="template: { name: 'publisher-type-preference-template', foreach: publisherTypeDefaults }"></tbody>
+                </table>
+            </div>
+
+            <div>
+                <button class="btn btn-primary btn-default" data-bind="click: savePreferences, enable: ready">Save</button>
+            </div>
+        </div>
+    </script>
+
+    <script type="text/html" id="publisher-type-preference-template">
+        <tr>
+            <td class="left col-md-1">
+                <span><span data-bind="text: transport"></span> (<span data-bind="text: provider"></span>)</span>
+            </td>
+            <td class="left col-md-2">
+                <input class="form-control" data-bind="textInput: defaultRecipient, enable: ready" type="text" placeholder="Recipient (e.g. phone number)">
+            </td>
+            <td class="left col-md-2">
+                <input class="form-control" data-bind="textInput: defaultRecipientHmac, enable: ready" type="text" placeholder="HMAC">
+            </td>
+            <td class="left col-md-2">
+                <div class="dropdown">
+                    <button class="btn btn-default dropdown-toggle" data-bind="enable: ready" type="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                        <span data-bind="text: allowTimezone"></span>
+                    </button>
+                    <ul class="dropdown-menu" data-bind="foreach: timezones">
+                        <li class="center"><a href="#" data-bind="text: $data, click: function() { $parent.selectTimezone($data); }"></a></li>
+                    </ul>
+                </div>
+            </td>
+            <td class="left col-md-1">
+                <input class="form-control" data-bind="textInput: allowStartTime, enable: ready" type="text" placeholder="HH:MM">
+            </td>
+            <td class="left col-md-1">
+                <input class="form-control" data-bind="textInput: allowEndTime, enable: ready" type="text" placeholder="HH:MM">
+            </td>
+            <td class="center col-md-1">
+                <input type="checkbox" data-bind="checked: priceActive, enable: ready">
+            </td>
+            <td class="center col-md-1">
+                <input type="checkbox" data-bind="checked: newsActive, enable: ready">
+            </td>
+            <td class="center col-md-1">
+                <input type="checkbox" data-bind="checked: matchActive, enable: ready">
+            </td>
+        </tr>
+    </script>
+
+    <script type="text/html" id="trigger-history-template">
+        <div class="table-controls">
+            <div class="order-control">
+                <select class="form-control" data-bind="options: triggersSortOptions, value: triggersSelectedSort"></select>
+            </div>
+        </div>
+
+        <table class="table table-triggers table-striped small">
+            <thead>
+                <th class="center col-md-3">ID</th>
+                <th class="left col-md-2">Description</th>
+                <th class="center col-md-1">
+                    <span class="text-button text-button-black glyphicon glyphicon-collapse-down" data-bind="click: () => updateTriggers('Read')"></span>
+                    <span style="padding: 0 5px">Read</span>
+                    <span class="text-button text-button-black glyphicon glyphicon-unchecked" data-bind="click: () => updateTriggers('Unread')"></span>
+                </th>
+                <th class="center col-md-2">Trigger Date</th>
+                <th class="center col-md-2">Trigger Status Date</th>
+            </thead>
+            <tbody data-bind="foreach: triggersFormatted">
+                <tr>
+                    <td class="center col-md-3" data-bind="{ visible: display.first, attr: { rowspan: display.rowSpan }, text: trigger().alert_id }"></td>
+                    <!-- ko ifnot: news.isExist -->
+                    <td class="left col-md-3" data-bind="text: trigger().trigger_description"></td>
+                    <!-- /ko -->
+                    <!-- ko if: news.isExist -->
+                    <td class="left col-md-3">
+                        <a target="_blank" data-bind="attr: { 'href': trigger().trigger_additional_data.data.link },text: trigger().trigger_description"></a>
+                    </td>
+                    <!-- /ko -->
+                    <td class="center col-md-2">
+                        <input type="checkbox" data-bind="enable: !loading(), click: () => toggle(), checked: display.read()">
+                    </td>
+                    <td class="center col-md-2" data-bind="text: display.date"></td>
+                    <td class="center col-md-2" data-bind="text: display.statusDate"></td>
+                </tr>
+            </tbody>
+        </table>
+    </script>
+</head>
+<body>
+    <div class="header" data-bind="template: { name: 'alert-header-template' }"></div>
+    <div class="main" data-bind="template: { name: activeTemplate }"></div>
+    <div class="footer">
+        <h4 class="pull-left">
+	        <span data-bind="providerDescription"></span>
+	        <span data-bind="visible: connected">
+				<span data-bind="text: authenticatedUser"></span>
+				<span>::</span>
+				<span data-bind="text: host"></span>
+				<span>::</span>
+				<span data-bind="text: mode"></span>
+	        </span>
+		</h4>
+        <h4 class="pull-right">
+			<span data-bind="visible: connected"><a href="https://barchart.github.io/alerts-client-js/#/content/sdk_reference" target="_blank" style="color: white;">sdk version <span data-bind="text: version().sdk"></span></a> :: </span>
+			<span data-bind="visible: connected"><a href="https://barchart.github.io/alerts-client-js/#/content/api_reference" target="_blank" style="color: white;">api version <span data-bind="text: version().api"></span></a></span>
+        </h4>
+    </div>
+</body>
+</html>
